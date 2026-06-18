@@ -1,10 +1,13 @@
 const http = require("node:http");
+const fsSync = require("node:fs");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
 const root = __dirname;
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
+
+loadLocalEnv();
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -78,6 +81,22 @@ const knownLocations = [
   { keys: ["崇礼", "张家口"], name: "张家口 · 崇礼", latitude: 40.97, longitude: 115.28 },
   { keys: ["莫干山"], name: "莫干山", latitude: 30.61, longitude: 119.87 }
 ];
+
+function loadLocalEnv() {
+  const envPath = path.join(root, ".env");
+  if (!fsSync.existsSync(envPath)) return;
+  const content = fsSync.readFileSync(envPath, "utf8");
+  content.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return;
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex === -1) return;
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const rawValue = trimmed.slice(separatorIndex + 1).trim();
+    const value = rawValue.replace(/^["']|["']$/g, "");
+    if (key && process.env[key] === undefined) process.env[key] = value;
+  });
+}
 
 function makeScene(overrides = {}) {
   return {
@@ -530,6 +549,140 @@ async function searchMandatoryGear(query, scene = {}) {
   }
 }
 
+function getMiniMaxConfig() {
+  return {
+    apiKey: process.env.MINIMAX_API_KEY || "",
+    model: process.env.MINIMAX_MODEL || "MiniMax-M3",
+    baseUrl: process.env.MINIMAX_API_BASE_URL || "https://api.minimax.chat/v1/chat/completions"
+  };
+}
+
+function buildAssistantPrompt(taskType, payload = {}) {
+  const scene = payload.scene || {};
+  const gear = Array.isArray(payload.gear) ? payload.gear : [];
+  const mandatory = payload.mandatoryGear || null;
+  const sceneText = [
+    `场景：${scene.mode || "race"}`,
+    `运动：${scene.sport || "running"}`,
+    `跑步类型：${scene.runType || "unknown"}`,
+    `细分：${scene.detail || "unknown"}`,
+    `地点：${scene.location || "待确认"}`,
+    `距离：${scene.distance || "待确认"}km`,
+    `预计用时：${scene.duration || "待确认"}`,
+    `天气：${scene.temp || "?"}°C，湿度${scene.humidity || "?"}%，风力${scene.wind || "?"}，降雨${scene.rain || "?"}，日晒${scene.sun || "?"}，海拔${scene.altitude || "?"}m`,
+    `目标：${scene.pace || "待确认"}`
+  ].join("\n");
+  const gearText = gear.map((item) => `- ${item.name || "未知装备"}：${item.meta || item.tags || ""}`).join("\n") || "暂无装备库";
+  const mandatoryText = mandatory?.items?.length
+    ? `强制装备：${mandatory.items.join("、")}\n来源：${mandatory.source || "待确认"}`
+    : "强制装备：暂无官方清单";
+
+  const taskPrompts = {
+    rules: "请基于当前场景生成 4 条装备搭配规则。每条包含：规则名、触发条件、推荐动作、风险提醒。语言要短、产品化、适合直接展示在网页。",
+    "gear-card-copy": "请生成 3 张游戏装备卡片文案。每张包含：装备名、稀有度、核心属性、适用场景、短描述、购买/不购买判断。不要编造具体品牌价格。",
+    "mandatory-gear-review": "请审核强制装备和补给是否足够。输出：必带清单、建议补给节奏、缺口、赛前确认事项。必须标注官方清单不明确时需要用户二次确认。"
+  };
+
+  return [
+    "你是 GearMind 智能装备助手的 MiniMax M3 子任务模型。",
+    "你的任务是为主模型准备候选内容，主模型会审核后再合并。",
+    "不要输出 Markdown 表格。不要使用夸张营销语。不要给医疗建议。",
+    "请用中文输出，结构清晰，信息密度高。",
+    "",
+    `任务：${taskPrompts[taskType] || taskPrompts.rules}`,
+    "",
+    sceneText,
+    "",
+    "用户已有装备：",
+    gearText,
+    "",
+    mandatoryText
+  ].join("\n");
+}
+
+async function parseJSONBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+    if (Buffer.concat(chunks).length > 1024 * 1024) {
+      throw new Error("Request body too large");
+    }
+  }
+  if (!chunks.length) return {};
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+async function runMiniMaxTask(taskType, payload) {
+  const config = getMiniMaxConfig();
+  if (!config.apiKey) {
+    return {
+      ok: false,
+      needsConfig: true,
+      provider: "MiniMax M3",
+      message: "未配置 MINIMAX_API_KEY。请在本地 .env 或云平台环境变量中配置后重启服务。"
+    };
+  }
+
+  const prompt = buildAssistantPrompt(taskType, payload);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch(config.baseUrl, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          {
+            role: "system",
+            content: "你是严谨的运动装备产品助手，只输出可供主模型审核的候选内容。"
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.4,
+        max_tokens: 900
+      })
+    });
+    const text = await response.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(data?.error?.message || data?.base_resp?.status_msg || text || `MiniMax request failed: ${response.status}`);
+    }
+
+    const content =
+      data?.choices?.[0]?.message?.content ||
+      data?.choices?.[0]?.delta?.content ||
+      data?.reply ||
+      data?.output_text ||
+      text;
+
+    return {
+      ok: true,
+      provider: "MiniMax M3",
+      model: config.model,
+      taskType,
+      content: String(content).trim(),
+      raw: data
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const requestedPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
@@ -607,6 +760,20 @@ const server = http.createServer(async (req, res) => {
     const result = await searchMandatoryGear(query, { detail, distance });
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (url.pathname === "/api/assistant-task" && req.method === "POST") {
+    try {
+      const body = await parseJSONBody(req);
+      const taskType = body.taskType || "rules";
+      const result = await runMiniMaxTask(taskType, body.payload || {});
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, provider: "MiniMax M3", error: error.message }));
+    }
     return;
   }
 
