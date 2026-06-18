@@ -553,7 +553,7 @@ function getMiniMaxConfig() {
   return {
     apiKey: process.env.MINIMAX_API_KEY || "",
     model: process.env.MINIMAX_MODEL || "MiniMax-M3",
-    baseUrl: process.env.MINIMAX_API_BASE_URL || "https://api.minimax.chat/v1/chat/completions"
+    baseUrl: process.env.MINIMAX_API_BASE_URL || "https://api.minimax.io/v1/responses"
   };
 }
 
@@ -628,28 +628,65 @@ async function runMiniMaxTask(taskType, payload) {
   const timeout = setTimeout(() => controller.abort(), 30000);
 
   try {
+    const usesResponsesApi = config.baseUrl.includes("/responses");
+    const usesAnthropicApi = config.baseUrl.includes("/anthropic/");
+    const requestBody = usesAnthropicApi
+      ? {
+          model: config.model,
+          max_tokens: 900,
+          system: "你是严谨的运动装备产品助手，只输出可供主模型审核的候选内容。",
+          messages: [
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          thinking: {
+            type: "disabled"
+          }
+        }
+      : usesResponsesApi
+      ? {
+          model: config.model,
+          instructions: "你是严谨的运动装备产品助手，只输出可供主模型审核的候选内容。",
+          input: prompt,
+          temperature: 0.4,
+          max_output_tokens: 900,
+          reasoning: {
+            effort: "none"
+          }
+        }
+      : {
+          model: config.model,
+          messages: [
+            {
+              role: "system",
+              content: "你是严谨的运动装备产品助手，只输出可供主模型审核的候选内容。"
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          temperature: 0.4,
+          max_tokens: 900
+        };
+
     const response = await fetch(config.baseUrl, {
       method: "POST",
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`
+        ...(usesAnthropicApi
+          ? {
+              "X-Api-Key": config.apiKey,
+              "anthropic-version": "2023-06-01"
+            }
+          : {
+              Authorization: `Bearer ${config.apiKey}`
+            })
       },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          {
-            role: "system",
-            content: "你是严谨的运动装备产品助手，只输出可供主模型审核的候选内容。"
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        temperature: 0.4,
-        max_tokens: 900
-      })
+      body: JSON.stringify(requestBody)
     });
     const text = await response.text();
     let data = null;
@@ -664,10 +701,11 @@ async function runMiniMaxTask(taskType, payload) {
     }
 
     const content =
+      data?.output_text ||
+      data?.content?.find?.((item) => item.type === "text")?.text ||
       data?.choices?.[0]?.message?.content ||
       data?.choices?.[0]?.delta?.content ||
       data?.reply ||
-      data?.output_text ||
       text;
 
     return {
@@ -764,6 +802,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === "/api/assistant-task" && req.method === "POST") {
+    if (process.env.ENABLE_DEV_ASSISTANT !== "true") {
+      res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "Developer assistant is disabled" }));
+      return;
+    }
+
     try {
       const body = await parseJSONBody(req);
       const taskType = body.taskType || "rules";

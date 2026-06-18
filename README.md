@@ -22,9 +22,9 @@ http://127.0.0.1:4173
 - `POST /api/assistant-task`
 - `GET /healthz`
 
-## MiniMax M3 子任务助手
+## MiniMax M3 开发助手
 
-M3 用于生成候选规则、装备卡文案和强制装备审核。真实 API Key 不要提交到 Git。
+M3 只作为开发阶段的子任务助手，不出现在 GearMind 产品页面里。它适合生成候选规则、装备卡文案和强制装备审核草稿。真实 API Key 不要提交到 Git。
 
 本地配置：
 
@@ -37,10 +37,11 @@ cp .env.example .env
 ```env
 MINIMAX_API_KEY=your_minimax_key_here
 MINIMAX_MODEL=MiniMax-M3
-MINIMAX_API_BASE_URL=https://api.minimax.chat/v1/chat/completions
+MINIMAX_API_BASE_URL=https://api.minimax.io/v1/responses
+ENABLE_DEV_ASSISTANT=true
 ```
 
-如果 MiniMax 官方 endpoint 和默认值不同，只需要改 `MINIMAX_API_BASE_URL`。
+如果 MiniMax 官方 endpoint 和默认值不同，只需要改 `MINIMAX_API_BASE_URL`。`/api/assistant-task` 默认关闭，只有 `ENABLE_DEV_ASSISTANT=true` 时才可用。
 
 ## 部署
 

@@ -886,16 +886,14 @@ select:focus {
 
 .rules-card,
 .feedback-card,
-.profile-card,
-.assistant-card {
+.profile-card {
   border: 1px solid rgba(63, 111, 75, 0.24);
   border-radius: var(--radius);
   background: rgba(255, 253, 247, 0.72);
   padding: 14px;
 }
 
-.profile-card,
-.assistant-card {
+.profile-card {
   margin-top: 12px;
 }
 
@@ -971,56 +969,6 @@ select:focus {
   color: #3f4d4e;
   font-size: 13px;
   line-height: 1.55;
-}
-
-.assistant-card {
-  border-color: rgba(47, 98, 117, 0.24);
-  background:
-    linear-gradient(135deg, rgba(47, 98, 117, 0.1), transparent 48%),
-    rgba(255, 253, 247, 0.74);
-}
-
-.assistant-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.assistant-actions button {
-  min-height: 36px;
-  border: 1px solid rgba(47, 98, 117, 0.24);
-  border-radius: 6px;
-  background: #fffdf7;
-  color: var(--ink);
-  cursor: pointer;
-  font-weight: 900;
-}
-
-.assistant-actions button:hover {
-  border-color: rgba(47, 98, 117, 0.42);
-  background: rgba(47, 98, 117, 0.1);
-}
-
-.assistant-card p {
-  margin: 12px 0 0;
-  color: #3f4d4e;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.assistant-card pre {
-  max-height: 260px;
-  overflow: auto;
-  margin: 12px 0 0;
-  border: 1px solid rgba(47, 98, 117, 0.18);
-  border-radius: 6px;
-  background: rgba(29, 31, 26, 0.04);
-  color: var(--ink);
-  padding: 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
 .profile-grid {

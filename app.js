@@ -433,9 +433,6 @@ const rulesList = document.querySelector("#rulesList");
 const feedbackButtons = document.querySelector("#feedbackButtons");
 const feedbackStatus = document.querySelector("#feedbackStatus");
 const profileGrid = document.querySelector("#profileGrid");
-const assistantActions = document.querySelector("#assistantActions");
-const assistantStatus = document.querySelector("#assistantStatus");
-const assistantOutput = document.querySelector("#assistantOutput");
 const raceSearchInput = document.querySelector("#raceSearchInput");
 const raceDetectResult = document.querySelector("#raceDetectResult");
 const raceImageInput = document.querySelector("#raceImageInput");
@@ -858,75 +855,6 @@ function applyFeedback(type) {
   renderRecommendation();
 }
 
-function collectCurrentScene() {
-  const selectedSport = sportCategorySelect.options[sportCategorySelect.selectedIndex];
-  const selectedRunType = runTypeSelect.options[runTypeSelect.selectedIndex];
-  const selectedDetail = runDetailSelect.options[runDetailSelect.selectedIndex];
-  return {
-    mode: activeMode,
-    sport: selectedSport?.textContent || sportCategorySelect.value,
-    runType: selectedRunType?.textContent || runTypeSelect.value,
-    detail: selectedDetail?.textContent || runDetailSelect.value,
-    temp: Number(tempInput.value),
-    humidity: Number(humidityInput.value),
-    wind: windSelect.options[windSelect.selectedIndex]?.textContent || windSelect.value,
-    rain: rainSelect.options[rainSelect.selectedIndex]?.textContent || rainSelect.value,
-    sun: sunSelect.options[sunSelect.selectedIndex]?.textContent || sunSelect.value,
-    altitude: Number(altitudeInput.value),
-    location: locationInput.value.trim(),
-    distance: Number(distanceInput.value),
-    duration: durationInput.value.trim(),
-    eventTime: eventTimeInput.value.trim(),
-    pace: paceInput.value.trim()
-  };
-}
-
-async function runAssistantTask(taskType) {
-  if (window.location.protocol === "file:") {
-    assistantStatus.textContent = "当前是 file:// 打开，M3 子任务需要使用 http://127.0.0.1:4173。";
-    assistantOutput.textContent = "";
-    return;
-  }
-
-  const taskLabels = {
-    rules: "优化规则",
-    "gear-card-copy": "生成装备卡",
-    "mandatory-gear-review": "审核强装"
-  };
-
-  assistantStatus.textContent = `正在交给 MiniMax M3：${taskLabels[taskType] || "子任务"}...`;
-  assistantOutput.textContent = "";
-
-  try {
-    const response = await fetch("/api/assistant-task", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        taskType,
-        payload: {
-          scene: collectCurrentScene(),
-          gear: gearItems.map(({ name, meta, slot, rarityLabel, tags }) => ({ name, meta, slot, rarityLabel, tags })),
-          mandatoryGear: mandatoryGearResult
-        }
-      })
-    });
-    const result = await response.json();
-    if (!result.ok) {
-      assistantStatus.textContent = result.needsConfig ? "M3 还没配置 API Key。" : "M3 子任务失败。";
-      assistantOutput.textContent = result.message || result.error || "请检查服务端配置。";
-      return;
-    }
-
-    assistantStatus.textContent = `MiniMax M3 已返回候选内容：${taskLabels[taskType] || "子任务"}。`;
-    assistantOutput.textContent = result.content;
-  } catch (error) {
-    assistantStatus.textContent = "M3 子任务请求失败。";
-    assistantOutput.textContent = error.message;
-  }
-}
-
 function renderRecommendation() {
   const isRunning = sportCategorySelect.value === "running";
   runningFields.hidden = !isRunning;
@@ -1031,12 +959,6 @@ feedbackButtons.addEventListener("click", (event) => {
   const button = event.target.closest("[data-feedback]");
   if (!button) return;
   applyFeedback(button.dataset.feedback);
-});
-
-assistantActions.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-ai-task]");
-  if (!button) return;
-  runAssistantTask(button.dataset.aiTask);
 });
 
 document.querySelector("#refreshBtn").addEventListener("click", renderRecommendation);
