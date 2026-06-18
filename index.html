@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GearMind - 智能装备助手</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">GM</span>
+          <div>
+            <strong>GearMind</strong>
+            <span>智能装备助手</span>
+          </div>
+        </div>
+        <nav class="topnav" aria-label="主要导航">
+          <a href="#recommend">推荐</a>
+          <a href="#locker">装备库</a>
+          <a href="#shopping">购买分析</a>
+        </nav>
+        <button class="icon-button" id="cameraUploadBtn" type="button" title="上传装备">
+          <i data-lucide="camera"></i>
+        </button>
+      </header>
+
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Race day / Training / Daily</p>
+          <h1>你的智能装备助手</h1>
+          <p>
+            根据天气、地点、比赛和训练目标，结合你的装备库，自动推荐穿搭、携带清单和购买缺口。
+          </p>
+        </div>
+        <div class="hero-media-grid">
+          <div class="hero-visual primary" aria-label="路跑装备视觉图">
+            <img
+              src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80"
+              alt="红色跑鞋"
+            />
+            <div class="weather-chip">
+              <i data-lucide="cloud-rain"></i>
+              <span>8-15°C · 小雨 · 全马</span>
+            </div>
+          </div>
+          <div class="hero-visual secondary" aria-label="越野装备视觉图">
+            <img
+              src="https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=1200&q=80"
+              alt="越野跑与户外装备"
+            />
+            <div class="weather-chip">
+              <i data-lucide="mountain"></i>
+              <span>越野 · 中距离 · 强制装备</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="race-search" aria-label="搜索或识别比赛信息">
+        <div class="race-search-main">
+          <i data-lucide="search"></i>
+          <input
+            id="raceSearchInput"
+            type="search"
+            placeholder="搜索比赛信息，例如：杭州马拉松、崇礼168、上海半马"
+            value=""
+          />
+          <label class="upload-inline" for="raceImageInput">
+            <i data-lucide="image-plus"></i>
+            <span>放图片</span>
+          </label>
+          <input id="raceImageInput" class="file-input" type="file" accept="image/*" />
+          <button class="search-button" id="raceSearchBtn" type="button">搜索比赛</button>
+        </div>
+        <button class="image-detect-button" id="imageDetectBtn" type="button">
+          <i data-lucide="image-up"></i>
+          <span>识别图片</span>
+        </button>
+        <div class="race-detect-result" id="raceDetectResult">
+          <span>图片可能是</span>
+          <strong>越野跑 · 中距离训练 / 高海拔徒步穿越</strong>
+          <em>建议关注：海拔、风力、降雨、背包容量、抓地和防水外层</em>
+        </div>
+        <div class="race-image-preview" id="raceImagePreview" hidden>
+          <img id="racePreviewImage" alt="上传的比赛图片预览" />
+          <div>
+            <span>待识别图片</span>
+            <strong id="raceImageName">比赛图片</strong>
+            <em>可以上传比赛海报、路线图、天气截图或装备照片，系统会推断比赛类型和装备重点。</em>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace" id="recommend">
+        <aside class="panel scenario-panel">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Scene</p>
+              <h2>场景输入</h2>
+            </div>
+            <button class="icon-button subtle" type="button" title="刷新推荐" id="refreshBtn">
+              <i data-lucide="refresh-cw"></i>
+            </button>
+          </div>
+
+          <div class="segmented" role="tablist" aria-label="场景类型">
+            <button class="active" data-mode="race" type="button">比赛</button>
+            <button data-mode="training" type="button">训练</button>
+            <button data-mode="daily" type="button">日常</button>
+          </div>
+
+          <label>
+            运动类型
+            <select id="sportCategorySelect">
+              <option value="running">跑步</option>
+              <option value="cycling">骑行</option>
+              <option value="fitness">健身</option>
+              <option value="hiking">徒步</option>
+              <option value="daily">日常</option>
+            </select>
+          </label>
+
+          <div id="runningFields">
+            <div class="field-grid">
+              <label>
+                跑步类型
+                <select id="runTypeSelect">
+                  <option value="road">路跑</option>
+                  <option value="trail">越野跑</option>
+                </select>
+              </label>
+              <label>
+                细分项目
+                <select id="runDetailSelect"></select>
+              </label>
+            </div>
+          </div>
+
+          <div class="environment-grid">
+            <label>
+              温度
+              <input id="tempInput" type="number" value="12" min="-20" max="45" />
+            </label>
+            <label>
+              湿度
+              <input id="humidityInput" type="number" value="78" min="0" max="100" />
+            </label>
+            <label>
+              风力
+              <select id="windSelect">
+                <option value="calm">微风</option>
+                <option value="wind">大风</option>
+              </select>
+            </label>
+            <label>
+              降雨
+              <select id="rainSelect">
+                <option value="rain">小雨</option>
+                <option value="dry">无雨</option>
+                <option value="heavy-rain">大雨</option>
+              </select>
+            </label>
+            <label>
+              日晒
+              <select id="sunSelect">
+                <option value="cloudy">阴天</option>
+                <option value="sun">强日晒</option>
+                <option value="night">夜间</option>
+              </select>
+            </label>
+            <label>
+              海拔
+              <input id="altitudeInput" type="number" value="20" min="0" max="6000" />
+            </label>
+          </div>
+          <div class="weather-status" id="weatherStatus">
+            天气将根据地点和比赛时间自动更新
+          </div>
+
+          <label>
+            地点
+            <input id="locationInput" type="text" value="杭州 · 西湖区" />
+          </label>
+
+          <div class="field-grid">
+            <label>
+              距离 km
+              <input id="distanceInput" type="number" value="42.2" min="0" max="300" step="0.1" />
+            </label>
+            <label>
+              预计用时
+              <input id="durationInput" type="text" value="3小时45分" />
+            </label>
+          </div>
+
+          <label>
+            比赛 / 出发时间
+            <input id="eventTimeInput" type="text" value="2026-11-01 07:30" />
+          </label>
+
+          <label>
+            目标强度
+            <input id="paceInput" type="text" value="全马 3:45，稳妥完赛" />
+          </label>
+
+          <div class="preference">
+            <span>个人偏好</span>
+            <label class="toggle">
+              <input id="coldToggle" type="checkbox" checked />
+              <span></span>
+              怕冷
+            </label>
+            <label class="toggle">
+              <input id="rainToggle" type="checkbox" checked />
+              <span></span>
+              雨天保守
+            </label>
+          </div>
+
+          <div class="taxonomy">
+            <span>装备维度</span>
+            <div>
+              <b>类别</b>
+              <em>头部</em><em>眼部</em><em>上身</em><em>下身</em><em>鞋</em><em>包</em><em>配件</em><em>补给</em>
+            </div>
+            <div>
+              <b>属性</b>
+              <em>保暖</em><em>防风</em><em>防水</em><em>透气</em><em>速干</em><em>压缩</em><em>缓震</em><em>抓地</em><em>容量</em><em>重量</em>
+            </div>
+          </div>
+        </aside>
+
+        <section class="panel recommendation-panel">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Recommendation</p>
+              <h2>今日搭配方案</h2>
+            </div>
+            <span class="confidence">可信度 87%</span>
+          </div>
+
+          <div class="summary-strip">
+            <div>
+              <span>环境</span>
+              <strong id="summaryWeather">12°C · 小雨</strong>
+            </div>
+            <div>
+              <span>场景</span>
+              <strong id="summarySport">路跑 · 全马</strong>
+            </div>
+            <div>
+              <span>距离 / 时间</span>
+              <strong id="summaryDistance">42.2km · 3小时45分</strong>
+            </div>
+            <div>
+              <span>策略</span>
+              <strong id="summaryStrategy">开跑偏冷，后程防闷</strong>
+            </div>
+          </div>
+
+          <div class="outfit-grid" id="outfitGrid"></div>
+
+          <div class="reason-box">
+            <div>
+              <i data-lucide="sparkles"></i>
+              <h3>推荐理由</h3>
+            </div>
+            <p id="reasonText">
+              低温小雨全马更怕“起跑等待冷 + 后程闷热”。建议用轻量防风层开局，核心层保持速干，鞋子选择中长距离缓震款。
+            </p>
+          </div>
+
+          <div class="phase-two-grid">
+            <section class="rules-card" aria-label="搭配规则库">
+              <div class="mini-head">
+                <i data-lucide="book-open-check"></i>
+                <h3>搭配规则库</h3>
+              </div>
+              <div class="rules-list" id="rulesList"></div>
+            </section>
+
+            <section class="feedback-card" aria-label="反馈学习">
+              <div class="mini-head">
+                <i data-lucide="sliders-horizontal"></i>
+                <h3>反馈学习</h3>
+              </div>
+              <div class="feedback-buttons" id="feedbackButtons">
+                <button type="button" data-feedback="cold">太冷</button>
+                <button type="button" data-feedback="hot">太热</button>
+                <button type="button" data-feedback="good">刚好</button>
+                <button type="button" data-feedback="missing">缺装备</button>
+              </div>
+              <p id="feedbackStatus">还没有本场反馈，系统会用反馈调整下次推荐。</p>
+            </section>
+          </div>
+
+          <section class="profile-card" aria-label="个人偏好画像">
+            <div class="mini-head">
+              <i data-lucide="user-round-cog"></i>
+              <h3>个人偏好画像</h3>
+            </div>
+            <div class="profile-grid" id="profileGrid"></div>
+          </section>
+        </section>
+
+        <aside class="panel locker-panel" id="locker">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Locker</p>
+              <h2>我的装备库</h2>
+            </div>
+            <button class="icon-button subtle" id="addGearBtn" type="button" title="添加装备">
+              <i data-lucide="plus"></i>
+            </button>
+          </div>
+
+          <div class="coverage">
+            <span>场景覆盖率</span>
+            <strong>64%</strong>
+            <div class="bar"><span style="width: 64%"></span></div>
+          </div>
+
+          <div class="gear-list" id="gearList"></div>
+        </aside>
+      </section>
+
+      <section class="shopping" id="shopping">
+        <div class="shopping-copy">
+          <p class="section-kicker">Cart Intelligence</p>
+          <h2>购买分析不是导购，是帮你少买错装备。</h2>
+          <p>
+            系统会识别已有装备的覆盖范围，指出功能重叠、真实缺口和赛前优先级。
+          </p>
+        </div>
+        <div class="shopping-cards">
+          <article data-cart-action="need">
+            <span class="tag need">缺口</span>
+            <h3>轻量防风皮肤衣</h3>
+            <p>适合 5-15°C 小雨比赛，目前装备库没有稳定覆盖。</p>
+          </article>
+          <article data-cart-action="overlap">
+            <span class="tag overlap">重叠</span>
+            <h3>碳板竞速鞋</h3>
+            <p>与你已有的竞速鞋定位相近，除非 PB 目标明确，否则优先级低。</p>
+          </article>
+          <article data-cart-action="priority">
+            <span class="tag priority">优先</span>
+            <h3>越野强制装备包</h3>
+            <p>如果进入越野中长距离场景，容量和补给携带会成为短板。</p>
+          </article>
+        </div>
+      </section>
+    </main>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

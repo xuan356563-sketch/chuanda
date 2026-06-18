@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: gearmind
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 22
