@@ -506,7 +506,7 @@ h1 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(260px, 0.86fr) minmax(420px, 1.42fr) minmax(280px, 0.92fr);
+  grid-template-columns: minmax(320px, 0.82fr) minmax(560px, 1.18fr);
   gap: 16px;
   align-items: start;
 }
@@ -541,6 +541,14 @@ h1 {
     linear-gradient(135deg, rgba(41, 63, 99, 0.13), transparent 42%),
     var(--locker-bg);
   box-shadow: 0 14px 36px rgba(41, 63, 99, 0.1);
+}
+
+.locker-section {
+  margin-top: 16px;
+}
+
+.locker-head {
+  align-items: flex-start;
 }
 
 .scenario-panel .section-kicker {
@@ -1009,11 +1017,26 @@ select:focus {
   padding: 13px;
 }
 
+.locker-section .coverage {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) auto minmax(240px, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.locker-section .coverage span {
+  margin: 0;
+}
+
 .coverage strong {
   display: block;
   margin: 4px 0 10px;
   font-size: 30px;
   line-height: 1;
+}
+
+.locker-section .coverage strong {
+  margin: 0;
 }
 
 .bar {
@@ -1034,6 +1057,10 @@ select:focus {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
+}
+
+.locker-section .gear-list {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .gear-card {
@@ -1338,6 +1365,10 @@ select:focus {
 @media (max-width: 1120px) {
   .workspace,
   .shopping {
+    grid-template-columns: 1fr;
+  }
+
+  .locker-section .coverage {
     grid-template-columns: 1fr;
   }
 
