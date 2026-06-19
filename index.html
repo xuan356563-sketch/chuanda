@@ -19,6 +19,7 @@
         </div>
         <nav class="topnav" aria-label="主要导航">
           <a href="#recommend">推荐</a>
+          <a href="#gear-intake">拍照入库</a>
           <a href="#locker">装备库</a>
           <a href="#shopping">购买分析</a>
         </nav>
@@ -75,10 +76,6 @@
           <input id="raceImageInput" class="file-input" type="file" accept="image/*" />
           <button class="search-button" id="raceSearchBtn" type="button">搜索比赛</button>
         </div>
-        <button class="image-detect-button" id="imageDetectBtn" type="button">
-          <i data-lucide="image-up"></i>
-          <span>识别图片</span>
-        </button>
         <div class="race-detect-result" id="raceDetectResult">
           <span>图片可能是</span>
           <strong>越野跑 · 中距离训练 / 高海拔徒步穿越</strong>
@@ -110,6 +107,11 @@
             <button class="active" data-mode="race" type="button">比赛</button>
             <button data-mode="training" type="button">训练</button>
             <button data-mode="daily" type="button">日常</button>
+          </div>
+
+          <div class="scene-mode-note" id="sceneModeNote">
+            <strong>比赛模式</strong>
+            <span>用于比赛日穿搭、强制装备、补给和赛前检查。</span>
           </div>
 
           <label>
@@ -308,6 +310,86 @@
 
       </section>
 
+      <section class="panel gear-intake-panel" id="gear-intake">
+        <div class="panel-head">
+          <div>
+            <p class="section-kicker">Photo Intake</p>
+            <h2>拍照识别建库</h2>
+          </div>
+          <label class="intake-upload" for="gearPhotoInput">
+            <i data-lucide="camera"></i>
+            <span>上传装备照片</span>
+          </label>
+          <input id="gearPhotoInput" class="file-input" type="file" accept="image/*" />
+        </div>
+
+        <div class="gear-intake-layout">
+          <div class="gear-photo-stage" id="gearPhotoStage">
+            <img id="gearPreviewImage" alt="上传的装备照片预览" hidden />
+            <div class="gear-photo-empty" id="gearPhotoEmpty">
+              <i data-lucide="image-plus"></i>
+              <strong>拍一张装备照片</strong>
+              <span>鞋、衣服、帽子、背包都可以。第一版会先给出 AI 猜测，再让你确认。</span>
+            </div>
+          </div>
+
+          <div class="gear-ai-panel">
+            <div class="gear-ai-status" id="gearAiStatus">
+              <span>等待上传</span>
+              <strong>AI 会识别类别、品牌和型号</strong>
+              <em>同款不同年份、配色和版本可能识别错，所以确认前不会自动入库。</em>
+            </div>
+
+            <div class="gear-form-grid">
+              <label>
+                类别
+                <select id="gearCategoryInput">
+                  <option value="鞋子">鞋</option>
+                  <option value="上身">衣服 / 上身</option>
+                  <option value="头部">帽子 / 头部</option>
+                  <option value="背包">包</option>
+                  <option value="眼部">墨镜 / 眼部</option>
+                  <option value="配件">配件</option>
+                </select>
+              </label>
+              <label>
+                品牌
+                <input id="gearBrandInput" type="text" placeholder="例如 Nike / Salomon" />
+              </label>
+              <label>
+                型号
+                <input id="gearModelInput" type="text" placeholder="例如 Vaporfly 3" />
+              </label>
+              <label>
+                重量
+                <input id="gearWeightInput" type="text" placeholder="例如 198g / 12L" />
+              </label>
+              <label>
+                面料 / 材质
+                <input id="gearMaterialInput" type="text" placeholder="例如 Flyknit / 防泼水尼龙" />
+              </label>
+              <label>
+                定位
+                <input id="gearPositionInput" type="text" placeholder="例如 全马竞速 / 越野强装背包" />
+              </label>
+              <label class="wide">
+                适用场景
+                <input id="gearScenarioInput" type="text" placeholder="路跑、全马、比赛" />
+              </label>
+              <label class="wide">
+                装备属性
+                <input id="gearAttributeInput" type="text" placeholder="缓震、推进、透气、抓地" />
+              </label>
+            </div>
+
+            <div class="gear-intake-actions">
+              <button id="gearSearchInfoBtn" type="button">搜索公开商品信息</button>
+              <button id="gearConfirmBtn" type="button">确认并加入装备库</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel locker-panel locker-section" id="locker">
         <div class="panel-head locker-head">
           <div>
@@ -331,7 +413,7 @@
       <section class="shopping" id="shopping">
         <div class="shopping-copy">
           <p class="section-kicker">Cart Intelligence</p>
-          <h2>购买分析不是导购，是帮你少买错装备。</h2>
+          <h2><span>购买分析不是导购，</span><br /><span>是帮你少买错装备。</span></h2>
           <p>
             系统会识别已有装备的覆盖范围，指出功能重叠、真实缺口和赛前优先级。
           </p>
@@ -357,6 +439,6 @@
     </main>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./app.js"></script>
+    <script src="./app.js?v=20260619-mode-presets"></script>
   </body>
 </html>

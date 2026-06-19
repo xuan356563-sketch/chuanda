@@ -549,11 +549,614 @@ async function searchMandatoryGear(query, scene = {}) {
   }
 }
 
-function getMiniMaxConfig() {
+const gearFallbacks = [
+  {
+    keywords: ["vaporfly", "nike", "飞马", "碳板", "跑鞋", "shoe"],
+    candidate: {
+      category: "鞋子",
+      brand: "Nike",
+      model: "Vaporfly 3",
+      material: "Flyknit 工程网眼 + ZoomX 泡棉，需确认年份和配色版本",
+      weight: "约 180-220g，随尺码变化",
+      positioning: "路跑竞速 / 半马全马",
+      scenarios: ["路跑", "比赛", "半马", "全马"],
+      attributes: ["缓震", "推进", "轻量"],
+      confidence: 0.68,
+      note: "图片名或关键词命中 Nike/Vaporfly/跑鞋。Vaporfly 同款年份和配色差异较多，需用户确认。"
+    }
+  },
+  {
+    keywords: ["salomon", "adv", "skin", "hydration", "vest", "背包", "越野包"],
+    candidate: {
+      category: "背包",
+      brand: "Salomon",
+      model: "Adv Skin",
+      material: "弹力网布 + 尼龙，容量版本需确认",
+      weight: "容量/尺码不同，需确认",
+      positioning: "越野跑补给背心 / 强制装备携带",
+      scenarios: ["越野跑", "中长距离", "强制装备"],
+      attributes: ["容量", "稳定", "补给"],
+      confidence: 0.64,
+      note: "图片名或关键词命中 Salomon/Adv Skin/背包。Adv Skin 有 5/8/12 等容量和年份差异。"
+    }
+  },
+  {
+    keywords: ["oakley", "sunglasses", "glasses", "墨镜", "眼镜"],
+    candidate: {
+      category: "眼部",
+      brand: "Oakley",
+      model: "运动墨镜",
+      material: "镜片和镜架材质需确认",
+      weight: "待补全",
+      positioning: "强日晒训练 / 越野 / 骑行",
+      scenarios: ["强日晒", "越野", "骑行"],
+      attributes: ["防晒", "视野", "防风"],
+      confidence: 0.58,
+      note: "图片名或关键词命中 Oakley/墨镜。镜片版本和年份容易混淆，需确认。"
+    }
+  },
+  {
+    keywords: ["jacket", "shirt", "singlet", "tee", "衣", "背心", "短袖", "长袖", "皮肤衣"],
+    candidate: {
+      category: "上身",
+      brand: "",
+      model: "",
+      material: "速干聚酯 / 弹力面料，需确认吊牌或商品页",
+      weight: "待补全",
+      positioning: "跑步上身层",
+      scenarios: ["训练", "比赛", "日常"],
+      attributes: ["透气", "速干", "轻量"],
+      confidence: 0.46,
+      note: "按上身装备关键词推断。服装同款配色、面料版本差异大，建议手动确认。"
+    }
+  },
+  {
+    keywords: ["cap", "hat", "visor", "帽"],
+    candidate: {
+      category: "头部",
+      brand: "",
+      model: "",
+      material: "速干面料，需确认",
+      weight: "待补全",
+      positioning: "跑步帽 / 遮阳控汗",
+      scenarios: ["训练", "比赛", "日晒"],
+      attributes: ["遮阳", "速干", "防风"],
+      confidence: 0.46,
+      note: "按头部装备关键词推断。帽檐、空顶帽、鸭舌帽需要用户确认。"
+    }
+  }
+];
+
+function findGearFallback(text) {
+  const lower = text.toLowerCase();
+  return gearFallbacks.find((item) => item.keywords.some((keyword) => lower.includes(keyword.toLowerCase())));
+}
+
+function makeGenericGearCandidate(fileName = "") {
   return {
-    apiKey: process.env.MINIMAX_API_KEY || "",
-    model: process.env.MINIMAX_MODEL || "MiniMax-M3",
-    baseUrl: process.env.MINIMAX_API_BASE_URL || "https://api.minimax.io/v1/responses"
+    category: "鞋子",
+    brand: "",
+    model: "",
+    material: "待用户确认",
+    weight: "待补全",
+    positioning: "日常训练 / 比赛待确认",
+    scenarios: ["训练", "日常"],
+    attributes: ["待识别"],
+    confidence: 0.32,
+    note: `未从 ${fileName || "照片"} 中获得高可信特征，已生成低可信度候选。`
+  };
+}
+
+function parseDataUrl(dataUrl = "") {
+  const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/);
+  if (!match) return null;
+  return {
+    mediaType: match[1],
+    data: match[2]
+  };
+}
+
+function extractFirstJSONObject(text = "") {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const raw = fenced ? fenced[1] : text;
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    return JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeVisionCandidate(value = {}, fallback) {
+  return {
+    category: value.category || fallback.category,
+    brand: value.brand || fallback.brand || "",
+    model: value.model || fallback.model || "",
+    material: value.material || fallback.material,
+    weight: value.weight || fallback.weight,
+    positioning: value.positioning || fallback.positioning,
+    scenarios: Array.isArray(value.scenarios) ? value.scenarios : fallback.scenarios,
+    attributes: Array.isArray(value.attributes) ? value.attributes : fallback.attributes,
+    confidence: typeof value.confidence === "number" ? Math.max(0, Math.min(1, value.confidence)) : fallback.confidence,
+    note: value.note || fallback.note
+  };
+}
+
+function buildGearVisionPrompt(fileName) {
+  return [
+    "你是 GearMind 的运动装备图片识别模型。请看图片，识别这件装备，并只输出 JSON，不要输出 Markdown。",
+    "目标是“AI 猜测 + 用户确认”，不要假装百分百确定。同款不同年份、配色、版本容易识别错时，请在 note 里提醒。",
+    "如果看不清品牌或型号，请留空，不要编造。",
+    "",
+    `图片文件名：${fileName || "未知"}`,
+    "",
+    "JSON 字段必须是：",
+    "{",
+    '  "category": "鞋子|上身|头部|背包|眼部|配件",',
+    '  "brand": "品牌，无法确定则空字符串",',
+    '  "model": "型号，无法确定则空字符串",',
+    '  "material": "面料/材质猜测，无法确定则写待确认",',
+    '  "weight": "重量/容量猜测，无法确定则写待补全",',
+    '  "positioning": "装备定位，例如越野竞速鞋/路跑训练鞋/补给背心",',
+    '  "scenarios": ["适用场景，最多4个"],',
+    '  "attributes": ["装备属性，最多5个"],',
+    '  "confidence": 0.0,',
+    '  "note": "为什么这么猜，以及需要用户确认什么"',
+    "}"
+  ].join("\n");
+}
+
+function buildRaceImagePrompt(fileName) {
+  return [
+    "你是 GearMind 的比赛海报、路线图、天气截图和运动场景图片识别模型。请看图片，并只输出 JSON，不要输出 Markdown。",
+    "目标是帮助用户快速建立场景输入。不要假装百分百确定；如果图片信息不足，请给低 confidence，并在 note 里提醒用户确认。",
+    "如果图片是装备照片，也要识别出它不是比赛信息，并尽量推断适合的运动场景。",
+    "",
+    `图片文件名：${fileName || "未知"}`,
+    "",
+    "枚举要求：",
+    "- sport: running|cycling|fitness|hiking|daily",
+    "- runType: road|trail，仅 sport=running 时使用",
+    "- detail: road-5k|road-10k|road-half|road-marathon|interval|lsd|recovery|trail-short|trail-mid|trail-long|trail-ultra",
+    "- wind: calm|wind|strong",
+    "- rain: dry|drizzle|rain|storm",
+    "- sun: sunny|cloudy|night",
+    "",
+    "JSON 字段必须是：",
+    "{",
+    '  "imageType": "比赛海报|路线图|天气截图|装备照片|户外场景|不确定",',
+    '  "name": "比赛/线路/场景名称，无法确定则写待确认图片场景",',
+    '  "scene": {',
+    '    "mode": "race|training|commute|travel|daily",',
+    '    "sport": "running|cycling|fitness|hiking|daily",',
+    '    "runType": "road|trail",',
+    '    "detail": "上面的 detail 枚举之一",',
+    '    "temp": 14,',
+    '    "humidity": 70,',
+    '    "wind": "calm|wind|strong",',
+    '    "rain": "dry|drizzle|rain|storm",',
+    '    "sun": "sunny|cloudy|night",',
+    '    "altitude": 20,',
+    '    "location": "地点，无法确定则写地点待确认",',
+    '    "distance": 0,',
+    '    "duration": "预计用时或待确认",',
+    '    "eventTime": "比赛/出发时间或待确认",',
+    '    "pace": "目标强度/场景策略"',
+    "  },",
+    '  "gearFocus": ["装备重点，最多6个"],',
+    '  "confidence": 0.0,',
+    '  "note": "为什么这么判断，以及用户需要确认什么"',
+    "}"
+  ].join("\n");
+}
+
+function normalizeRaceImageResult(value = {}, fallbackScene) {
+  const scene = value.scene || {};
+  return {
+    ok: true,
+    provider: "MiniMax M3 vision",
+    name: value.name || "待确认图片场景",
+    imageType: value.imageType || "不确定",
+    confidence: typeof value.confidence === "number" ? Math.max(0, Math.min(1, value.confidence)) : 0.4,
+    gearFocus: Array.isArray(value.gearFocus) ? value.gearFocus.slice(0, 6) : [],
+    evidence: value.note || "已根据图片内容推断场景，请确认后使用。",
+    scene: makeScene({
+      ...fallbackScene,
+      mode: scene.mode || fallbackScene.mode,
+      sport: scene.sport || fallbackScene.sport,
+      runType: scene.runType || fallbackScene.runType,
+      detail: scene.detail || fallbackScene.detail,
+      temp: typeof scene.temp === "number" ? scene.temp : fallbackScene.temp,
+      humidity: typeof scene.humidity === "number" ? scene.humidity : fallbackScene.humidity,
+      wind: scene.wind || fallbackScene.wind,
+      rain: scene.rain || fallbackScene.rain,
+      sun: scene.sun || fallbackScene.sun,
+      altitude: typeof scene.altitude === "number" ? scene.altitude : fallbackScene.altitude,
+      location: scene.location || fallbackScene.location,
+      distance: typeof scene.distance === "number" ? scene.distance : fallbackScene.distance,
+      duration: scene.duration || fallbackScene.duration,
+      eventTime: scene.eventTime || fallbackScene.eventTime,
+      pace: scene.pace || fallbackScene.pace
+    })
+  };
+}
+
+async function identifyRaceImage(payload = {}) {
+  const image = parseDataUrl(payload.imageDataUrl || "");
+  if (!image) throw new Error("缺少可识别的图片数据");
+
+  const config = getMiniMaxConfig();
+  if (!config.apiKey) throw new Error("未配置 MINIMAX_API_KEY");
+
+  const fallbackScene = makeScene({
+    mode: "race",
+    sport: "running",
+    runType: "trail",
+    detail: "trail-mid",
+    temp: 10,
+    humidity: 65,
+    wind: "wind",
+    rain: "dry",
+    sun: "cloudy",
+    altitude: 650,
+    location: "地点待确认",
+    distance: 20,
+    duration: "3-4小时",
+    eventTime: "时间待确认",
+    pace: "图片识别场景，保守携带"
+  });
+  const prompt = buildRaceImagePrompt(payload.fileName || "");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+
+  try {
+    const usesResponsesApi = config.baseUrl.includes("/responses");
+    const usesAnthropicApi = config.baseUrl.includes("/anthropic/");
+    const requestBody = usesAnthropicApi
+      ? {
+          model: config.model,
+          max_tokens: 1000,
+          system: "你是严谨的运动比赛图片识别助手，只输出 JSON。",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: image.mediaType,
+                    data: image.data
+                  }
+                },
+                { type: "text", text: prompt }
+              ]
+            }
+          ],
+          thinking: { type: "disabled" }
+        }
+      : usesResponsesApi
+      ? {
+          model: config.model,
+          instructions: "你是严谨的运动比赛图片识别助手，只输出 JSON。",
+          input: [
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: prompt },
+                { type: "input_image", image_url: payload.imageDataUrl }
+              ]
+            }
+          ],
+          max_output_tokens: 1000
+        }
+      : {
+          model: config.model,
+          messages: [
+            { role: "system", content: "你是严谨的运动比赛图片识别助手，只输出 JSON。" },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: payload.imageDataUrl,
+                    detail: "default"
+                  }
+                }
+              ]
+            }
+          ],
+          max_tokens: 1000,
+          thinking: { type: "disabled" }
+        };
+
+    const response = await fetch(config.baseUrl, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(usesAnthropicApi
+          ? {
+              "X-Api-Key": config.apiKey,
+              "anthropic-version": "2023-06-01"
+            }
+          : {
+              Authorization: `Bearer ${config.apiKey}`
+            })
+      },
+      body: JSON.stringify(requestBody)
+    });
+    const text = await response.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+    if (!response.ok) {
+      throw new Error(data?.error?.message || data?.base_resp?.status_msg || text || `MiniMax race image failed: ${response.status}`);
+    }
+
+    const content =
+      data?.output_text ||
+      data?.content?.find?.((item) => item.type === "text")?.text ||
+      data?.choices?.[0]?.message?.content ||
+      data?.reply ||
+      text;
+    const parsed = extractFirstJSONObject(String(content));
+    if (!parsed) throw new Error("MiniMax M3 未返回可解析 JSON");
+    return normalizeRaceImageResult(parsed, fallbackScene);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function runMiniMaxGearVision(payload = {}) {
+  const config = getMiniMaxConfig();
+  if (!config.apiKey) throw new Error("未配置 MINIMAX_API_KEY");
+
+  const image = parseDataUrl(payload.imageDataUrl || "");
+  if (!image) throw new Error("缺少可识别的图片数据");
+
+  const prompt = buildGearVisionPrompt(payload.fileName || "");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+
+  try {
+    const usesResponsesApi = config.baseUrl.includes("/responses");
+    const usesAnthropicApi = config.baseUrl.includes("/anthropic/");
+    const requestBody = usesAnthropicApi
+      ? {
+          model: config.model,
+          max_tokens: 900,
+          system: "你是严谨的运动装备识别助手，只输出 JSON。",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: image.mediaType,
+                    data: image.data
+                  }
+                },
+                {
+                  type: "text",
+                  text: prompt
+                }
+              ]
+            }
+          ],
+          thinking: {
+            type: "disabled"
+          }
+        }
+      : usesResponsesApi
+      ? {
+          model: config.model,
+          instructions: "你是严谨的运动装备识别助手，只输出 JSON。",
+          input: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: prompt
+                },
+                {
+                  type: "input_image",
+                  image_url: payload.imageDataUrl
+                }
+              ]
+            }
+          ],
+          temperature: 0.2,
+          max_output_tokens: 900
+        }
+      : {
+          model: config.model,
+          messages: [
+            {
+              role: "system",
+              content: "你是严谨的运动装备识别助手，只输出 JSON。"
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: payload.imageDataUrl
+                  }
+                },
+                {
+                  type: "text",
+                  text: prompt
+                }
+              ]
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 900
+        };
+
+    const response = await fetch(config.baseUrl, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(usesAnthropicApi
+          ? {
+              "X-Api-Key": config.apiKey,
+              "anthropic-version": "2023-06-01"
+            }
+          : {
+              Authorization: `Bearer ${config.apiKey}`
+            })
+      },
+      body: JSON.stringify(requestBody)
+    });
+    const text = await response.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(data?.error?.message || data?.base_resp?.status_msg || text || `MiniMax vision failed: ${response.status}`);
+    }
+
+    const content =
+      data?.output_text ||
+      data?.content?.find?.((item) => item.type === "text")?.text ||
+      data?.choices?.[0]?.message?.content ||
+      data?.reply ||
+      text;
+    const parsed = extractFirstJSONObject(String(content));
+    if (!parsed) throw new Error("MiniMax M3 未返回可解析 JSON");
+    return parsed;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function identifyGear(payload = {}) {
+  const fileName = payload.fileName || "";
+  const fallback = findGearFallback(fileName)?.candidate || makeGenericGearCandidate(fileName);
+  try {
+    const visionCandidate = await runMiniMaxGearVision(payload);
+    return {
+      ok: true,
+      provider: "MiniMax M3 vision",
+      candidate: {
+        ...normalizeVisionCandidate(visionCandidate, fallback),
+        source: "MiniMax M3 图片识别",
+        note: `${visionCandidate.note || fallback.note} 请确认品牌、型号、年份、配色和版本后再入库。`
+      }
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      provider: "MiniMax M3 vision fallback",
+      error: error.message,
+      candidate: {
+        ...fallback,
+        source: "MiniMax M3 识别失败后的本地兜底",
+        note: `MiniMax M3 图片识别失败：${error.message}。${fallback.note} 请手动确认后入库。`
+      }
+    };
+  }
+}
+
+function inferGearFromSearch(query, category, sources) {
+  const text = `${query} ${sources.map((item) => `${item.title} ${item.snippet}`).join(" ")}`;
+  const fallback = findGearFallback(text)?.candidate || makeGenericGearCandidate(query);
+  const materialHints = [];
+  if (/flyknit|mesh|网眼|工程网眼/i.test(text)) materialHints.push("工程网眼 / 透气织面");
+  if (/zoomx|foam|泡棉|eva/i.test(text)) materialHints.push("高回弹泡棉");
+  if (/nylon|尼龙|ripstop|防撕裂/i.test(text)) materialHints.push("尼龙 / 防撕裂面料");
+  if (/polyester|聚酯|速干/i.test(text)) materialHints.push("速干聚酯");
+
+  const weightMatch = text.match(/(\d{2,4}\s?(?:g|克)|\d+(?:\.\d+)?\s?L|\d+(?:\.\d+)?升)/i);
+  const officialish = sources.find((item) => /官网|官方|旗舰店|商品|product|review|评测|参数/i.test(`${item.title} ${item.snippet}`));
+
+  return {
+    ...fallback,
+    category: category || fallback.category,
+    material: materialHints.length ? [...new Set(materialHints)].join(" + ") : fallback.material,
+    weight: weightMatch?.[0] || fallback.weight,
+    source: officialish?.title || sources[0]?.title || "公开搜索摘要",
+    sourceUrl: officialish?.url || sources[0]?.url || "",
+    confidence: sources.length ? Math.max(fallback.confidence || 0.4, officialish ? 0.72 : 0.58) : fallback.confidence,
+    note: sources.length
+      ? "已根据公开搜索摘要补全面料、重量或定位。商品同款不同年份/配色/版本仍需用户确认。"
+      : "未找到明确公开资料，保留本地猜测。"
+  };
+}
+
+async function completeGearInfo(query, category) {
+  const searchQuery = `${query} ${category || ""} 商品 参数 重量 面料 适用场景 review`;
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 GearMind local prototype",
+        Accept: "text/html"
+      }
+    });
+    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+    const html = await response.text();
+    const sources = extractDuckDuckGoResults(html);
+    return {
+      ok: true,
+      provider: "DuckDuckGo HTML",
+      candidate: inferGearFromSearch(query, category, sources),
+      sources
+    };
+  } catch (error) {
+    const fallback = findGearFallback(query)?.candidate || makeGenericGearCandidate(query);
+    return {
+      ok: false,
+      provider: "local fallback",
+      candidate: {
+        ...fallback,
+        category: category || fallback.category,
+        source: "公开资料搜索失败后的本地兜底",
+        note: `搜索公开商品信息失败：${error.message}。请手动确认后入库。`
+      },
+      sources: []
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function getMiniMaxConfig() {
+  const cleanToken = (value = "") => value.trim().replace(/^<|>$/g, "");
+  const normalizeBaseUrl = (value = "") => {
+    const baseUrl = value.trim().replace(/\/+$/g, "");
+    if (!baseUrl) return "https://api.minimaxi.com/v1/chat/completions";
+    if (baseUrl.endsWith("/v1")) return `${baseUrl}/chat/completions`;
+    if (baseUrl.endsWith("/anthropic")) return `${baseUrl}/v1/messages`;
+    return baseUrl;
+  };
+
+  return {
+    apiKey: cleanToken(process.env.MINIMAX_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || ""),
+    model: process.env.MINIMAX_MODEL || process.env.ANTHROPIC_MODEL || "MiniMax-M3",
+    baseUrl: normalizeBaseUrl(process.env.MINIMAX_API_BASE_URL || process.env.OPENAI_BASE_URL || process.env.ANTHROPIC_BASE_URL || "")
   };
 }
 
@@ -604,7 +1207,7 @@ async function parseJSONBody(req) {
   const chunks = [];
   for await (const chunk of req) {
     chunks.push(chunk);
-    if (Buffer.concat(chunks).length > 1024 * 1024) {
+    if (Buffer.concat(chunks).length > 8 * 1024 * 1024) {
       throw new Error("Request body too large");
     }
   }
@@ -796,6 +1399,47 @@ const server = http.createServer(async (req, res) => {
     }
 
     const result = await searchMandatoryGear(query, { detail, distance });
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (url.pathname === "/api/gear-identify" && req.method === "POST") {
+    try {
+      const body = await parseJSONBody(req);
+      const result = await identifyGear(body);
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: error.message }));
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/race-image-identify" && req.method === "POST") {
+    try {
+      const body = await parseJSONBody(req);
+      const result = await identifyRaceImage(body);
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, provider: "MiniMax M3 vision", error: error.message }));
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/gear-complete") {
+    const query = (url.searchParams.get("q") || "").trim();
+    const category = (url.searchParams.get("category") || "").trim();
+    if (!query) {
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "Missing q" }));
+      return;
+    }
+
+    const result = await completeGearInfo(query, category);
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify(result));
     return;
