@@ -8,3 +8,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22
+      - key: MINIMAX_API_KEY
+        sync: false
+      - key: MINIMAX_MODEL
+        value: MiniMax-M3
+      - key: MINIMAX_API_BASE_URL
+        value: https://api.minimax.io/v1/responses
+      - key: ENABLE_DEV_ASSISTANT
+        value: "false"
