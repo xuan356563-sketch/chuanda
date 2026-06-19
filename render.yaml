@@ -2,6 +2,7 @@ services:
   - type: web
     name: gearmind
     env: node
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /healthz
