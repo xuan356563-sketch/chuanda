@@ -58,3 +58,29 @@ npm start
 ```
 
 云平台需要把服务端口通过 `PORT` 环境变量传入，`server.js` 会自动监听 `0.0.0.0:$PORT`。
+
+### Render 部署步骤
+
+1. 打开 Render Dashboard，选择 New -> Blueprint。
+2. 连接 GitHub 仓库：`https://github.com/xuan356563-sketch/chuanda`。
+3. Render 会读取仓库里的 `render.yaml`，创建一个 Node Web Service。
+4. 在服务的 Environment 里添加：
+
+```env
+MINIMAX_API_KEY=你的 MiniMax API Key
+MINIMAX_MODEL=MiniMax-M3
+MINIMAX_API_BASE_URL=https://api.minimax.io/v1/responses
+ENABLE_DEV_ASSISTANT=false
+```
+
+5. 部署完成后访问 Render 分配的 `https://*.onrender.com` 地址。
+
+注意：`.env` 只用于本地开发，不要提交到 GitHub。云端必须在平台后台配置环境变量。
+
+### Railway 部署步骤
+
+1. 打开 Railway，选择 Deploy from GitHub repo。
+2. 选择 `xuan356563-sketch/chuanda`。
+3. Railway 会读取 `railway.json` 并执行 `npm start`。
+4. 在 Variables 中添加与 Render 相同的 MiniMax 环境变量。
+5. 生成 Public Domain 后，用公网地址访问。
